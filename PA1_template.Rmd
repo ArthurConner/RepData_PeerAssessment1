@@ -1,25 +1,130 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: 'Reproducible Research: Peer Assessment 1'
+output:
   html_document:
-    keep_md: true
+    keep_md: yes
+  pdf_document: default
 ---
 
 
 ## Loading and preprocessing the data
 
+```{r}
+library(plyr)
+library(ggplot2)
 
+temp <- tempfile()
+
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", temp,"curl")
+
+con <- unz(temp, "activity.csv")
+activity <- read.table(con, header=T, sep=",")
+unlink(temp)
+clean <- activity[complete.cases(activity),]
+
+dailyTotals <- ddply(clean,.(date),summarize,totalSteps=round(sum(steps),2))
+
+
+IntervalTotals <- ddply(clean,.(interval),summarize,aveSteps=round(mean(steps),2))
+
+emptyRecords  <- nrow(activity) - nrow(clean)
+
+```
+
+We have `r emptyRecords` records that are missing values.
 
 ## What is mean total number of steps taken per day?
 
+```{r echo=FALSE}
+plot1 <- qplot(data=dailyTotals,x=totalSteps,main="Distribution of Number of Steps",ylab="Number of days with these step counts",xlab="Steps take during a day",Nubinwidth=1000)
 
+plot1
+```
+
+```{r echo=TRUE}
+meanClean <- mean(dailyTotals$totalSteps)
+medianClean <- median(dailyTotals$totalSteps)
+
+```
+
+We had a mean of `r format(meanClean, format="d", big.mark=',')` and medain of `r format(medianClean, format="d", big.mark=',')`.
 
 ## What is the average daily activity pattern?
 
 
+```{r echo=FALSE}
+plot2 <- qplot(data=IntervalTotals,type="l",x=interval,y=aveSteps,geom="line",ylab="Average Steps taking durning the Interval",xlab="15 minute interval during the Day") 
+plot2
+
+```
+
+```{r echo=TRUE}
+maxrow <-which.max(IntervalTotals[,2])
+maxinterval <- IntervalTotals$interval[maxrow]
+```
+
+`r maxinterval` is the 5-minute interval, on average across all the days in the dataset, thate contains the maximum number of steps.
+
 
 ## Imputing missing values
 
+From earlier we know that we have `r emptyRecords` records that are missing values.
 
+We will transform the dataset by replacing NA with the median across intervals.
+
+```{r echo=TRUE}
+
+df <- activity
+
+filled <- ddply(activity, 
+      .(interval), 
+      transform, 
+      steps=ifelse(is.na(steps), median(steps, na.rm=TRUE), steps))
+cleanFilled <- activity[complete.cases(filled),]
+dailyFilledTotals <- ddply(filled,.(date),summarize,totalSteps=round(sum(steps),2))
+
+
+emptyFilledRecords  <- nrow(activity) - nrow(cleanFilled)
+meanFilledClean <- mean(dailyFilledTotals$totalSteps)
+medianFilledClean <- median(dailyFilledTotals$totalSteps)
+
+
+```
+
+
+
+If we filled `r emptyFilledRecords` should be zero.
+
+We had a mean of `r format(meanFilledClean, format="d", big.mark=',')` and medain of `r format(medianFilledClean, format="d", big.mark=',')` when we filled with the medians.
+
+```{r echo=TRUE}
+nrow(dailyFilledTotals)
+nrow(dailyTotals)
+```
+
+Normally we would think that filling would increaase the mean, but because we had entirely empty days, when we filled for those it brought the average down.
+
+
+```{r echo=FALSE}
+plot1 <- qplot(data=dailyFilledTotals,x=totalSteps,main="Distribution of Number of Steps after NA",ylab="Number of days with these step counts",xlab="Steps take during a day",Nubinwidth=1000)
+
+plot1
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r echo=TRUE}
+clean$weekday <- !(weekdays(as.Date(clean$date)) %in% c('Saturday','Sunday')) 
+
+IntervalAbbeyTotals <- ddply(clean,.(interval,weekday),summarize,aveSteps=round(mean(steps),2))
+```
+
+
+```{r echo=FALSE}
+plotPanel <- qplot(data=IntervalAbbeyTotals,x=interval,y=aveSteps,geom="line",ylab="Number of Steps",xlab="Interval") + facet_wrap(  ~  weekday, ncol=1)
+
+plotPanel
+
+```
+
